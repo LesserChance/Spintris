@@ -1,95 +1,106 @@
 import "CoreLibs/graphics"
 import "CoreLibs/ui"
 import "CoreLibs/timer"
-import "block"
-import "drawable"
-import "dropPiece"
-import "shapes/O"
+
+import "globals"
 import "shapes/L"
+import "shapes/O"
 
--- Localizing commonly used globals
-local pd <const> = playdate
-local gfx <const> = playdate.graphics
-local gridview = playdate.ui.gridview.new(10, 10)
-local block, topPiece, leftPiece, drawable
+import "pile"
+import "droppable"
 
--- gridview.backgroundImage = playdate.graphics.nineSlice.new('images/shadowbox', 4, 4, 45, 45)
-gridview:setNumberOfColumns(40)
-gridview:setNumberOfRows(24)
+local pd <const>  = playdate
+local gfx <const> = pd.graphics
+
+local gridview    = pd.ui.gridview.new(CELL_SIZE, CELL_SIZE)
+local pile
+local droppables  = {}
+
+-- gridview.backgroundImage = pd.graphics.nineSlice.new('images/shadowbox', 4, 4, 45, 45)
+gridview:setNumberOfColumns(GRID_WIDTH)
+gridview:setNumberOfRows(GRID_HEIGHT)
 
 function gridview:drawCell(section, row, column, selected, x, y, width, height)
-    gfx.drawRect(x, y, width, height)
+    -- gfx.drawRect(x, y, width, height)
 end
 
 local function initialize()
-    drawable = Drawable(ShapeL.shape)
+    local controlIndex = 4
 
-    playdate.inputHandlers.push({
+    droppables[1] = Droppable(DIRECTION_DOWN, ShapeL, 1, 0, 18)
+    droppables[2] = Droppable(DIRECTION_RIGHT, ShapeL, 0, 10, 0)
+    droppables[3] = Droppable(DIRECTION_UP, ShapeO, 2, 30, 18)
+    droppables[4] = Droppable(DIRECTION_LEFT, ShapeO, 0, 10, 35)
+    pile = Pile()
+
+    local inputHandlers = {
         upButtonUp = function()
-            drawable:moveUp()
+            droppables[controlIndex]:moveUp()
+            checkCollisions()
         end,
         downButtonUp = function()
-            drawable:moveDown()
+            droppables[controlIndex]:moveDown()
+            checkCollisions()
         end,
         leftButtonUp = function()
-            drawable:moveLeft()
+            droppables[controlIndex]:moveLeft()
+            checkCollisions()
         end,
         rightButtonUp = function()
-            drawable:moveRight()
+            droppables[controlIndex]:moveRight()
+            checkCollisions()
         end,
         AButtonUp = function()
-            drawable:rotateRight()
+            droppables[controlIndex]:rotateRight()
+            checkCollisions()
         end,
         BButtonUp = function()
-            drawable:rotateLeft()
+            droppables[controlIndex]:rotateLeft()
+            checkCollisions()
+        end,
+        cranked = function(change, acceleratedChange)
+            for i, droppable in ipairs(droppables) do
+                droppable.crankHandler:crankInputHandler(change, acceleratedChange)
+            end
+
+            pile.crankHandler:crankInputHandler(change, acceleratedChange)
         end
-    })
-
-    -- block = Block()
-    -- -- topPiece = DropPiece(0, ShapeO.shape)
-    -- leftPiece = DropPiece(270, ShapeL.shape)
-
-    -- playdate.inputHandlers.push({
-    --     cranked = function(change, acceleratedChange)
-    --         block:crankHandler(change, acceleratedChange)
-    --         -- topPiece:crankHandler(change, acceleratedChange)
-    --         leftPiece:crankHandler(change, acceleratedChange)
-    --     end
-    -- })
-    -- playdate.timer.new(1000, tick)
+    }
+    pd.inputHandlers.push(inputHandlers)
+    pd.timer.new(10, tick)
 end
 
--- playdate.update function is required in every project!
-function playdate.update()
+-- pd.update function is required in every project!
+function pd.update()
     -- Clear screen
     gfx.clear()
 
     -- Draw grid
     gridview:drawInRect(0, 0, 400, 240)
 
-    drawable:draw()
+    -- Draw Pile
+    pile:draw()
 
-    -- -- Draw Block
-    -- block:update()
-    -- -- topPiece:update()
-    -- leftPiece:update()
+    -- Draw droppables
+    for i, droppable in ipairs(droppables) do
+        droppable:draw()
+    end
 
-    -- playdate.timer:updateTimers()
+    pd.timer:updateTimers()
 end
 
 function tick()
-    -- -- topPiece:tick()
-    -- leftPiece:tick()
-    -- checkCollisions()
-    -- playdate.timer.new(1000, tick)
+    checkCollisions()
+    pd.timer.new(10, tick)
 end
 
 function checkCollisions()
-    -- -- if next tick overlaps, then we've collided
-    -- local colliderPositions = block:getGlobalGridPieceLocations()
-    -- if (leftPiece:checkCollisions(colliderPositions)) then
-    --     block:collideWith(leftPiece)
-    -- end
+    for i, droppable in ipairs(droppables) do
+        if (pile:collidesWith(droppable, droppable.moveDirection)) then
+            pile:mergeIn(droppable)
+            droppable:delete()
+        end
+    end
 end
 
 initialize()

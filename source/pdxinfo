@@ -1,6 +1,6 @@
-name=Game
+name=Spintris
 author=Ryan Bateman
-description=
-bundleID=
+description=Spintris
+bundleID=com.ryanbateman.spintris
 version=1.0.0
 buildNumber=1

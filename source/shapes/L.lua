@@ -9,4 +9,4 @@ class("ShapeL", {
         [2] = { [1] = true },
         [3] = { [1] = true, [2] = true }
     },
-}).extends(Object)
+}).extends()

@@ -1,19 +1,13 @@
 import "CoreLibs/object"
-import "CoreLibs/graphics"
-import "CoreLibs/sprites"
-import "CoreLibs/timer"
-import "shapes/L"
-local pd <const> = playdate
-local gfx = playdate.graphics
 
--- x and y dimensions of each cell
-local CELL_SIZE <const> = 10
-local DIRECTION_LEFT <const> = 0
-local DIRECTION_RIGHT <const> = 1
-local GRID_WIDTH = 40
-local GRID_HEIGHT = 24
+local pd <const>  = playdate
+local gfx <const> = pd.graphics
 
+---@class Drawable
 class("Drawable", {
+    deleted = nil,
+    shape = nil,
+
     -- global cell values
     topCell = 1,
     leftCell = 1,
@@ -30,25 +24,51 @@ class("Drawable", {
     leftPixel = 0,
     rightPixel = 0,
     bottomPixel = 0,
-}).extends(Object)
+}).extends()
 
-function Drawable:init(shape)
-    if (shape == ShapeL.shape) then
-        self.width = ShapeL.width
-        self.height = ShapeL.height
-        self.occupiedCells = ShapeL.occupiedCells
+---Initailize
+---@param shape? table
+---@param rotations? integer How many rotations to perform on the base shape
+---@param top? integer initial top cell position
+---@param left? integer initial left cell position
+function Drawable:init(shape, rotations, top, left)
+    if (shape) then
+        self.shape = shape.shape
+        self.width = shape.width
+        self.height = shape.height
+        self.occupiedCells = shape.occupiedCells
     end
+
     self:setCellPosition(self.topCell, self.leftCell)
+
+    if (rotations) then
+        while rotations >= 1 do
+            self:rotateRight()
+            rotations -= 1
+        end
+    end
+
+    -- position is set after rotation, assuming caller wants top left of expected rotation
+    if (top or left) then
+        self:setCellPosition(top or self.topCell, left or self.leftCell)
+    end
 end
 
+---Draw the drawable to the display
 function Drawable:draw()
-    for row = 1, self.height do
-        for column = 1, self.width do
+    if (self.deleted) then
+        return
+    end
+    for row, r in ipairs(self.occupiedCells) do
+        for column in pairs(r) do
             self:drawCell(row, column)
         end
     end
 end
 
+---Draw an individual cell to the display
+---@param row integer
+---@param column integer
 function Drawable:drawCell(row, column)
     if (self.occupiedCells[row] and self.occupiedCells[row][column]) then
         local position = {
@@ -61,30 +81,37 @@ function Drawable:drawCell(row, column)
     end
 end
 
+---move up one cell
 function Drawable:moveUp()
     self:setCellPosition(self.topCell - 1, self.leftCell)
 end
 
+---move down one cell
 function Drawable:moveDown()
     self:setCellPosition(self.topCell + 1, self.leftCell)
 end
 
+---move left one cell
 function Drawable:moveLeft()
     self:setCellPosition(self.topCell, self.leftCell - 1)
 end
 
+---move right one cell
 function Drawable:moveRight()
     self:setCellPosition(self.topCell, self.leftCell + 1)
 end
 
+---rotate counter clockwise
 function Drawable:rotateLeft()
     self:rotate(DIRECTION_LEFT)
 end
 
+---rotate clockwise
 function Drawable:rotateRight()
     self:rotate(DIRECTION_RIGHT)
 end
 
+---ensure the drawable stays within the bounds of the grid
 function Drawable:rebound()
     while self.topCell < 1 do
         self:moveDown()
@@ -100,45 +127,62 @@ function Drawable:rebound()
     end
 end
 
+---rotate
+---@param direction any
 function Drawable:rotate(direction)
+    local newTopRight = pd.geometry.point.new(self.leftPixel, self.topPixel)
+
     -- remap occupiedCells into a new array
     local newWidth = self.height
     local newHeight = self.width
     local newOccupiedCells = self:getRotatedCells(direction)
 
-    -- pivot around the center of the shape
-    local rightMove = (newWidth - self.width) / 2
-    local topMove = (newHeight - self.height) / 2
-    rightMove = (rightMove < 0) and math.ceil(rightMove) or math.floor(rightMove)
-    topMove = (topMove < 0) and math.ceil(topMove) or math.floor(topMove)
-
     self.width = newWidth
     self.height = newHeight
     self.occupiedCells = newOccupiedCells
 
-    self:setCellPosition(self.topCell - topMove, self.leftCell - rightMove)
+    local transform = pd.geometry.affineTransform.new()
+    if (direction == DIRECTION_LEFT) then
+        transform:rotate(-90, DISPLAY_CENTER)
+    else
+        transform:rotate(90, DISPLAY_CENTER)
+    end
+    transform:transformPoint(newTopRight)
+
+    local newTop = self:getNearestCell(newTopRight.y)
+    local newLeft = self:getNearestCell(newTopRight.x - (self.width * CELL_SIZE))
+
+    self:setCellPosition(newTop, newLeft)
 end
 
+---get all new positions for cells after a rotate
+---@param direction any
+---@return table
 function Drawable:getRotatedCells(direction)
     local newOccupiedCells = {}
 
-    for row = 1, self.height do
-        for column = 1, self.width do
-            if (self.occupiedCells[row] and self.occupiedCells[row][column]) then
-                local newPosition = self:getRotatedPosition(row, column, self.height, self.width, direction)
-                -- print(row .. "," .. column .. " -> " .. newPosition.row .. "," .. newPosition.column)
+    for row, r in ipairs(self.occupiedCells) do
+        for column in pairs(r) do
+            local newPosition = self:getRotatedPosition(row, column, self.height, self.width, direction)
+            -- print(row .. "," .. column .. " -> " .. newPosition.row .. "," .. newPosition.column)
 
-                if (not newOccupiedCells[newPosition.row]) then
-                    newOccupiedCells[newPosition.row] = {}
-                end
-                newOccupiedCells[newPosition.row][newPosition.column] = true
+            if (not newOccupiedCells[newPosition.row]) then
+                newOccupiedCells[newPosition.row] = {}
             end
+            newOccupiedCells[newPosition.row][newPosition.column] = true
         end
     end
 
     return newOccupiedCells
 end
 
+---if a cell were to be rotated which position would it then be in
+---@param row integer
+---@param column integer
+---@param newWidth integer
+---@param newHeight integer
+---@param direction any
+---@return table
 function Drawable:getRotatedPosition(row, column, newWidth, newHeight, direction)
     if (direction == DIRECTION_RIGHT) then
         return {
@@ -153,6 +197,9 @@ function Drawable:getRotatedPosition(row, column, newWidth, newHeight, direction
     end
 end
 
+---Set the drawable's position properties based on a new top-left position
+---@param top integer
+---@param left integer
 function Drawable:setCellPosition(top, left)
     self.topCell = top
     self.leftCell = left
@@ -165,4 +212,139 @@ function Drawable:setCellPosition(top, left)
     self.rightPixel = self.leftPixel + (self.width * CELL_SIZE)
 
     self:rebound()
+end
+
+---check if this drawable is colliding with another
+---@param collider Drawable
+---@return boolean
+function Drawable:collidesWith(collider, direction)
+    if (collider.deleted) then
+        return false
+    end
+    for row, r in ipairs(self.occupiedCells) do
+        for column in pairs(r) do
+            local gridRow = self.topCell + (row - 1)
+            local gridColumn = self.leftCell + (column - 1)
+
+            if (collider:isGridEdgeOccupied(gridRow, gridColumn, direction)) then
+                return true
+            end
+        end
+    end
+
+    return false
+end
+
+---check if the given cell on the full grid shares an edge with an occupied cell of this drawable
+---@param object Drawable
+---@return boolean
+function Drawable:isGridEdgeOccupied(gridRow, gridColumn, direction)
+    local localRow = gridRow - self.topCell + 1
+    local localColumn = gridColumn - self.leftCell + 1
+
+    -- local adjacentCells = {
+    --     ["below"] = { row = localRow + 1, column = localColumn },
+    --     ["above"] = { row = localRow - 1, column = localColumn },
+    --     ["left"] = { row = localRow, column = localColumn - 1 },
+    --     ["right"] = { row = localRow, column = localColumn + 1 }
+    -- }
+    -- for i, adjecentCell in ipairs(adjacentCells) do
+    --     if (self.occupiedCells[adjecentCell.row] and self.occupiedCells[adjecentCell.row][adjecentCell.column]) then
+    --         return true
+    --     end
+    -- end
+
+    local adjacentRow, adjacentColumn
+
+    if (direction == DIRECTION_DOWN) then
+        -- Only look at cells above this
+        adjacentRow = localRow - 1
+        adjacentColumn = localColumn
+    elseif (direction == DIRECTION_UP) then
+        -- Only look at cells below this
+        adjacentRow = localRow + 1
+        adjacentColumn = localColumn
+    elseif (direction == DIRECTION_LEFT) then
+        -- Only look at cells right of this
+        adjacentRow = localRow
+        adjacentColumn = localColumn + 1
+    elseif (direction == DIRECTION_RIGHT) then
+        -- Only look at cells left of this
+        adjacentRow = localRow
+        adjacentColumn = localColumn - 1
+    end
+
+    if (self.occupiedCells[adjacentRow] and self.occupiedCells[adjacentRow][adjacentColumn]) then
+        print("BAM")
+        return true
+    end
+
+    return false
+end
+
+---check if the given cell on the full grid is occupied by this drawable
+---@param object Drawable
+---@return boolean
+function Drawable:isGridCellOccupied(gridRow, gridColumn)
+    local localRow = gridRow - self.topCell + 1
+    local localColumn = gridColumn - self.leftCell + 1
+
+    return (self.occupiedCells[localRow] and self.occupiedCells[localRow][localColumn])
+end
+
+---stick that object onto this object
+---@param collider Drawable
+function Drawable:mergeIn(collider)
+    if (collider.deleted) then
+        return false
+    end
+
+    local newTop = math.min(collider.topCell, self.topCell)
+    local newLeft = math.min(collider.leftCell, self.leftCell)
+    local newBottom = math.max(collider.bottomCell, self.bottomCell)
+    local newRight = math.max(collider.rightCell, self.rightCell)
+    local newHeight = newBottom - newTop + 1
+    local newWidth = newRight - newLeft + 1
+    local newOccupiedCells = {}
+
+    -- travserse the global grid, and translate all occupied spaces of both drawales into this one
+    local localRow = 0
+    local localColumn = 0
+    for row = newTop, newBottom do
+        localRow = localRow + 1
+        localColumn = 0
+        for column = newLeft, newRight do
+            localColumn = localColumn + 1
+
+            if (self:isGridCellOccupied(row, column) or collider:isGridCellOccupied(row, column)) then
+                if (not newOccupiedCells[localRow]) then
+                    newOccupiedCells[localRow] = {}
+                end
+                newOccupiedCells[localRow][localColumn] = true
+            end
+        end
+    end
+
+    for row, r in ipairs(newOccupiedCells) do
+        for column in pairs(r) do
+            print(row .. "," .. column)
+        end
+    end
+
+    self.width = newWidth
+    self.height = newHeight
+    self.occupiedCells = newOccupiedCells
+    self:setCellPosition(newTop, newLeft)
+end
+
+function Drawable:getNearestCell(pos, direction)
+    if (direction == DIRECTION_UP) then
+        return math.ceil(pos / CELL_SIZE) + 1
+    end
+
+    return math.floor(pos / CELL_SIZE) + 1
+end
+
+function Drawable:delete()
+    self.deleted = true
 end

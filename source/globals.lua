@@ -2,7 +2,7 @@ local pd <const>                   = playdate
 local gfx <const>                  = pd.graphics
 
 -- x and y dimensions (in pixels) of each cell
-CELL_SIZE                          = 4
+CELL_SIZE                          = 10
 
 DIRECTION_LEFT                     = 0
 DIRECTION_RIGHT                    = 1

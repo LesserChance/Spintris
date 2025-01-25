@@ -11,13 +11,16 @@ import "pile"
 import "droppable"
 import "background"
 
-local pd <const>  = playdate
-local gfx <const> = pd.graphics
+local pd <const>    = playdate
+local gfx <const>   = pd.graphics
 
-local gridview    = pd.ui.gridview.new(CELL_SIZE, CELL_SIZE)
+local gridview      = pd.ui.gridview.new(CELL_SIZE, CELL_SIZE)
 local pile
-local droppables  = {}
+local droppables    = {}
 local background
+local ticks         = 0
+local nextSpawnTick = 10
+local gravity       = pd.geometry.vector2D.new(0, 0)
 
 gridview:setNumberOfColumns(GRID_WIDTH)
 gridview:setNumberOfRows(GRID_HEIGHT)
@@ -27,6 +30,7 @@ function gridview:drawCell(section, row, column, selected, x, y, width, height)
 end
 
 local function initialize()
+    math.randomseed(playdate.getSecondsSinceEpoch())
     local controlIndex = 1
 
     pile = Pile()
@@ -34,48 +38,56 @@ local function initialize()
 
     local inputHandlers = {
         upButtonDown = function()
-            background:moveCenter(pd.geometry.vector2D.new(0, -50))
+            gravity.dy -= 50
+            background:moveCenter(gravity)
         end,
         upButtonUp = function()
-            background:moveCenter(pd.geometry.vector2D.new(0, 50))
+            gravity.dy += 50
+            background:moveCenter(gravity)
             -- droppables[controlIndex]:moveUp()
         end,
         downButtonDown = function()
-            background:moveCenter(pd.geometry.vector2D.new(0, 50))
+            gravity.dy += 50
+            background:moveCenter(gravity)
             -- for i, droppable in ipairs(droppables) do
             --     droppable:speedUp()
             -- end
         end,
         downButtonUp = function()
-            background:moveCenter(pd.geometry.vector2D.new(0, -50))
+            gravity.dy -= 50
+            background:moveCenter(gravity)
             -- for i, droppable in ipairs(droppables) do
             --     droppable:slowDown()
             -- end
         end,
         leftButtonDown = function()
-            background:moveCenter(pd.geometry.vector2D.new(-50, 0))
+            gravity.dx -= 50
+            background:moveCenter(gravity)
             -- droppables[controlIndex]:moveLeft()
         end,
         leftButtonUp = function()
-            background:moveCenter(pd.geometry.vector2D.new(50, 0))
+            gravity.dx += 50
+            background:moveCenter(gravity)
             -- droppables[controlIndex]:moveLeft()
         end,
         rightButtonDown = function()
-            background:moveCenter(pd.geometry.vector2D.new(50, 0))
+            gravity.dx += 50
+            background:moveCenter(gravity)
             --     droppables[controlIndex]:moveRight()
         end,
         rightButtonUp = function()
-            background:moveCenter(pd.geometry.vector2D.new(-50, 0))
+            gravity.dx -= 50
+            background:moveCenter(gravity)
             --     droppables[controlIndex]:moveRight()
         end,
         AButtonUp = function()
             -- s:rotateRight()
-            spawnPiece()
+            -- spawnPiece()
             -- droppables[controlIndex]:rotateRight()
         end,
         BButtonUp = function()
             -- s:rotateLeft()
-            spawnPiece()
+            -- spawnPiece()
             -- droppables[controlIndex]:rotateLeft()
         end,
         cranked = function(change, acceleratedChange)
@@ -103,14 +115,24 @@ function pd.update()
 
     -- Draw droppables
     for i, droppable in ipairs(droppables) do
-        droppable:update()
+        droppable:update(gravity)
     end
 
     pd.timer:updateTimers()
+    checkCollisions()
 end
 
 function tick()
-    checkCollisions()
+    ticks = ticks + 1
+
+    if (ticks == nextSpawnTick) then
+        -- if (math.random(0, 1) >= 1) then
+        -- spawnPiece()
+        -- end
+        ticks = 0
+        nextSpawnTick = math.random(50, 100)
+    end
+
     pd.timer.new(10, tick)
 end
 

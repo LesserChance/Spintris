@@ -6,6 +6,14 @@ local pd <const> = playdate
 ---@class Droppable
 class("Droppable", {
     speed = 100,
+    gravity = nil,
+
+    pivotStart = nil,
+    pivotAngle = 0,
+    pivotDuration = 200,
+    pivotAngleLerp = nil,
+    pivotLerp = nil,
+
     speedVariant = nil,
     crankHandler = nil,
     pivotPosition = nil,
@@ -35,6 +43,26 @@ function Droppable:init(moveDirection, shape, rotations, top, left)
     end)
 end
 
+function Droppable:update(gravity)
+    self.gravity = gravity
+
+    local pivotAngle = self.pivotAngle
+    if (self.pivotAngleLerp and self.pivotAngleLerp.timeLeft > 0) then
+        pivotAngle = self.pivotAngleLerp.value
+    end
+
+    if (pivotAngle ~= 0) then
+        -- rotate the self.imgDrawCenter around the display center
+        local newImgDrawCenter = pd.geometry.point.new(self.pivotStart.x, self.pivotStart.y)
+        local transform = pd.geometry.affineTransform.new()
+        transform:rotate(pivotAngle, DISPLAY_CENTER.x, DISPLAY_CENTER.y)
+        transform:transformPoint(newImgDrawCenter)
+        self.imgDrawCenter = newImgDrawCenter
+    end
+
+    Droppable.super.update(self)
+end
+
 function Droppable:tick()
     if (self.deleted) then
         return
@@ -48,6 +76,7 @@ function Droppable:tick()
     elseif (self.moveDirection == DIRECTION_RIGHT) then
         self:moveRight()
     end
+
     pd.timer.new(self.speed, function() self:tick() end)
 end
 
@@ -67,6 +96,15 @@ end
 
 ---rotate around the center of the screen
 function Droppable:pivotLeft()
+    self.pivotStart = pd.geometry.point.new(self.imgDrawCenter.x, self.imgDrawCenter.y)
+    self.pivotAngleLerp = pd.timer.new(self.pivotDuration, 0, -90, pd.easingFunctions.inOutCubic)
+    self.pivotLerp = pd.timer.new(self.pivotDuration, function()
+        self.pivotAngleLerp:remove()
+        self:finalizePivotLeft()
+    end)
+end
+
+function Droppable:finalizePivotLeft()
     local newBottomLeft = pd.geometry.point.new(self.leftPixel, self.topPixel)
 
     local transform = pd.geometry.affineTransform.new()

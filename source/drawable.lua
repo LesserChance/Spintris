@@ -5,7 +5,7 @@ local gfx <const> = pd.graphics
 
 ---@class Drawable
 class("Drawable", {
-    deleted = nil,
+    deleted = false,
     shape = nil,
 
     -- global cell values
@@ -242,18 +242,6 @@ function Drawable:isGridEdgeOccupied(gridRow, gridColumn, direction)
     local localRow = gridRow - self.topCell + 1
     local localColumn = gridColumn - self.leftCell + 1
 
-    -- local adjacentCells = {
-    --     ["below"] = { row = localRow + 1, column = localColumn },
-    --     ["above"] = { row = localRow - 1, column = localColumn },
-    --     ["left"] = { row = localRow, column = localColumn - 1 },
-    --     ["right"] = { row = localRow, column = localColumn + 1 }
-    -- }
-    -- for i, adjecentCell in ipairs(adjacentCells) do
-    --     if (self.occupiedCells[adjecentCell.row] and self.occupiedCells[adjecentCell.row][adjecentCell.column]) then
-    --         return true
-    --     end
-    -- end
-
     local adjacentRow, adjacentColumn
 
     if (direction == DIRECTION_DOWN) then
@@ -322,12 +310,6 @@ function Drawable:mergeIn(collider)
                 end
                 newOccupiedCells[localRow][localColumn] = true
             end
-        end
-    end
-
-    for row, r in ipairs(newOccupiedCells) do
-        for column in pairs(r) do
-            print(row .. "," .. column)
         end
     end
 

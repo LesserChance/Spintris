@@ -6,6 +6,7 @@ local pd <const> = playdate
 ---@class Droppable
 class("Droppable", {
     speed = 100,
+    speedVariant = nil,
     crankHandler = nil,
     pivotPosition = nil,
     moveDirection = nil
@@ -15,7 +16,8 @@ function Droppable:init(moveDirection, shape, rotations, top, left)
     Droppable.super.init(self, shape, rotations, top, left)
 
     self.moveDirection = moveDirection
-    self.speed = math.random(500, 1500)
+    self.speed = math.random(MAX_DROPPABLE_SPEED, MIN_DROPPABLE_SPEED)
+    self.speedVariant = math.floor(self.speed / 4) * 3
     pd.timer.new(self.speed, function() self:tick() end)
 
     if (self.moveDirection == DIRECTION_UP) then
@@ -50,6 +52,14 @@ function Droppable:handleCrankRotations(rotations)
     for rotation = 1, rotations do
         self:pivotLeft()
     end
+end
+
+function Droppable:speedUp()
+    self.speed -= self.speedVariant
+end
+
+function Droppable:slowDown()
+    self.speed += self.speedVariant
 end
 
 ---rotate around the center of the screen

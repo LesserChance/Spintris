@@ -1,12 +1,24 @@
 import "CoreLibs/object"
+import "CoreLibs/graphics"
+import "CoreLibs/sprites"
 
 local pd <const>  = playdate
 local gfx <const> = pd.graphics
+
 
 ---@class Drawable
 class("Drawable", {
     deleted = false,
     shape = nil,
+    img = nil,
+    drawAngle = 0,
+
+    rotationDuration = DEFAULT_DRAWABLE_ROTATION_DURATION,
+    drawAngleLerp = nil,
+    rotateLerp = nil,
+
+    imgDrawCenter = nil,  -- global pixel location image's enter
+    imgPivotCenter = nil, -- local pixel location for the pivot
 
     -- global cell values
     topCell = 1,
@@ -24,7 +36,7 @@ class("Drawable", {
     leftPixel = 0,
     rightPixel = 0,
     bottomPixel = 0,
-}).extends()
+}).extends(gfx.sprite)
 
 ---Initailize
 ---@param shape? table
@@ -37,13 +49,14 @@ function Drawable:init(shape, rotations, top, left)
         self.width = shape.width
         self.height = shape.height
         self.occupiedCells = shape.occupiedCells
+        self.imgPivotCenter = shape.pivotCenter
     end
 
     self:setCellPosition(self.topCell, self.leftCell)
 
     if (rotations) then
         while rotations >= 1 do
-            self:rotateRight()
+            self:rotateRight(true)
             rotations -= 1
         end
     end
@@ -52,17 +65,52 @@ function Drawable:init(shape, rotations, top, left)
     if (top or left) then
         self:setCellPosition(top or self.topCell, left or self.leftCell)
     end
+
+    self:add()
 end
 
----Draw the drawable to the display
-function Drawable:draw()
+function Drawable:update()
+    -- ---Draw the drawable to the display
     if (self.deleted) then
         return
     end
+
+    gfx.pushContext(self.img)
+    gfx.setColor(gfx.kColorClear)
+    gfx.fillRect(0, 0, self.width * CELL_SIZE, self.height * CELL_SIZE)
+
     for row, r in ipairs(self.occupiedCells) do
         for column in pairs(r) do
             self:drawCell(row, column)
         end
+    end
+
+    -- put a dot at the pivot point
+    -- gfx.setColor(gfx.kColorBlack)
+    -- gfx.fillCircleAtPoint(self.imgPivotCenter, 2)
+
+    gfx.popContext()
+
+    local angle = self.drawAngle
+    if (self.drawAngleLerp and self.drawAngleLerp.timeLeft > 0) then
+        angle = self.drawAngleLerp.value
+    end
+
+    if (angle ~= 0) then
+        -- rotate the pivot point around the center point, get the offset. then draw the image at the offset
+        local transform = pd.geometry.affineTransform.new()
+        local pivotOffset = pd.geometry.point.new(self.leftPixel + self.imgPivotCenter.x,
+            self.topPixel + self.imgPivotCenter.y)
+
+        transform:rotate(angle, self.imgDrawCenter.x, self.imgDrawCenter.y)
+        transform:transformPoint(pivotOffset)
+
+        local diffX = (pivotOffset.x - (self.leftPixel + self.imgPivotCenter.x))
+        local diffY = (pivotOffset.y - (self.topPixel + self.imgPivotCenter.y))
+
+        self.img:drawRotated(self.imgDrawCenter.x - diffX, self.imgDrawCenter.y - diffY, angle)
+    else
+        self.img:drawCentered(self.imgDrawCenter.x, self.imgDrawCenter.y)
     end
 end
 
@@ -70,14 +118,16 @@ end
 ---@param row integer
 ---@param column integer
 function Drawable:drawCell(row, column)
-    if (self.occupiedCells[row] and self.occupiedCells[row][column]) then
-        local position = {
-            x = self.leftPixel + ((column - 1) * CELL_SIZE),
-            y = self.topPixel + ((row - 1) * CELL_SIZE),
-        }
-        gfx.fillRoundRect(position.x, position.y, CELL_SIZE, CELL_SIZE, 5)
-    else
+    local position = {
+        x = ((column - 1) * CELL_SIZE),
+        y = ((row - 1) * CELL_SIZE),
+    }
 
+    if (self.occupiedCells[row] and self.occupiedCells[row][column]) then
+        gfx.setColor(gfx.kColorBlack)
+        gfx.fillRect(position.x, position.y, CELL_SIZE, CELL_SIZE, 5)
+    else
+        -- gfx.setColor(gfx.kColorWhite)
     end
 end
 
@@ -102,13 +152,45 @@ function Drawable:moveRight()
 end
 
 ---rotate counter clockwise
-function Drawable:rotateLeft()
-    self:rotate(DIRECTION_LEFT)
+---@param bypassAnimation? boolean default false
+function Drawable:rotateLeft(bypassAnimation)
+    if (bypassAnimation) then
+        self:rotate(DIRECTION_LEFT)
+        return
+    end
+
+    if (self.drawAngleLerp and self.drawAngleLerp.timeLeft > 0) then
+        self.drawAngleLerp:remove()
+        self.rotateLerp.timerEndedCallback()
+        self.rotateLerp:remove()
+    end
+
+    self.drawAngleLerp = pd.timer.new(self.rotationDuration, 0, 90, pd.easingFunctions.inOutCubic)
+    self.rotateLerp = pd.timer.new(self.rotationDuration, function()
+        self.drawAngleLerp:remove()
+        self:rotate(DIRECTION_LEFT)
+    end)
 end
 
 ---rotate clockwise
-function Drawable:rotateRight()
-    self:rotate(DIRECTION_RIGHT)
+---@param bypassAnimation? boolean default false
+function Drawable:rotateRight(bypassAnimation)
+    if (bypassAnimation) then
+        self:rotate(DIRECTION_RIGHT)
+        return
+    end
+
+    if (self.drawAngleLerp and self.drawAngleLerp.timeLeft > 0) then
+        self.drawAngleLerp:remove()
+        self.rotateLerp.timerEndedCallback()
+        self.rotateLerp:remove()
+    end
+
+    self.drawAngleLerp = pd.timer.new(self.rotationDuration, 0, 90, pd.easingFunctions.inOutCubic)
+    self.rotateLerp = pd.timer.new(self.rotationDuration, function()
+        self.drawAngleLerp:remove()
+        self:rotate(DIRECTION_RIGHT)
+    end)
 end
 
 ---ensure the drawable stays within the bounds of the grid
@@ -142,15 +224,23 @@ function Drawable:rotate(direction)
     self.occupiedCells = newOccupiedCells
 
     local transform = pd.geometry.affineTransform.new()
+
+    -- put pivot center into global system
     if (direction == DIRECTION_LEFT) then
-        transform:rotate(-90, DISPLAY_CENTER)
+        transform:rotate(-90, self.leftPixel + self.imgPivotCenter.x, self.topPixel + self.imgPivotCenter.y)
     else
-        transform:rotate(90, DISPLAY_CENTER)
+        transform:rotate(90, self.leftPixel + self.imgPivotCenter.x, self.topPixel + self.imgPivotCenter.y)
     end
     transform:transformPoint(newTopRight)
 
     local newTop = self:getNearestCell(newTopRight.y)
     local newLeft = self:getNearestCell(newTopRight.x - (self.width * CELL_SIZE))
+
+    local newPivotX = (newWidth * CELL_SIZE) - self.imgPivotCenter.y
+    local newPivotY = self.imgPivotCenter.x
+
+    self.imgPivotCenter.x = newPivotX
+    self.imgPivotCenter.y = newPivotY
 
     self:setCellPosition(newTop, newLeft)
 end
@@ -210,6 +300,11 @@ function Drawable:setCellPosition(top, left)
     self.leftPixel = (self.leftCell - 1) * CELL_SIZE
     self.bottomPixel = self.topPixel + (self.height * CELL_SIZE)
     self.rightPixel = self.leftPixel + (self.width * CELL_SIZE)
+
+    self.imgDrawCenter = pd.geometry.point.new((self.leftPixel + self.rightPixel) / 2,
+        (self.topPixel + self.bottomPixel) / 2)
+
+    self.img = gfx.image.new(self.width * CELL_SIZE, self.height * CELL_SIZE)
 
     self:rebound()
 end
@@ -295,7 +390,7 @@ function Drawable:mergeIn(collider)
     local newWidth = newRight - newLeft + 1
     local newOccupiedCells = {}
 
-    -- travserse the global grid, and translate all occupied spaces of both drawales into this one
+    -- travserse the global grid, and translate all occupied spaces of both drawables into this one
     local localRow = 0
     local localColumn = 0
     for row = newTop, newBottom do
@@ -315,6 +410,17 @@ function Drawable:mergeIn(collider)
 
     self.width = newWidth
     self.height = newHeight
+
+    -- move the pivot center
+    local globalPivotX = ((self.leftPixel) + self.imgPivotCenter.x)
+    local globalPivotY = ((self.topPixel) + self.imgPivotCenter.y)
+
+    local newPivotX = globalPivotX - ((newLeft - 1) * CELL_SIZE)
+    local newPivotY = globalPivotY - ((newTop - 1) * CELL_SIZE)
+
+    self.imgPivotCenter.x = newPivotX
+    self.imgPivotCenter.y = newPivotY
+
     self.occupiedCells = newOccupiedCells
     self:setCellPosition(newTop, newLeft)
 end

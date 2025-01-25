@@ -36,6 +36,9 @@ function Droppable:init(moveDirection, shape, rotations, top, left)
 end
 
 function Droppable:tick()
+    if (self.deleted) then
+        return
+    end
     if (self.moveDirection == DIRECTION_UP) then
         self:moveUp()
     elseif (self.moveDirection == DIRECTION_DOWN) then

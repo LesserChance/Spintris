@@ -5,9 +5,11 @@ import "CoreLibs/timer"
 import "globals"
 import "shapes/L"
 import "shapes/O"
+import "shapes/Pile"
 
 import "pile"
 import "droppable"
+import "background"
 
 local pd <const>  = playdate
 local gfx <const> = pd.graphics
@@ -15,6 +17,7 @@ local gfx <const> = pd.graphics
 local gridview    = pd.ui.gridview.new(CELL_SIZE, CELL_SIZE)
 local pile
 local droppables  = {}
+local background
 
 gridview:setNumberOfColumns(GRID_WIDTH)
 gridview:setNumberOfRows(GRID_HEIGHT)
@@ -27,39 +30,53 @@ local function initialize()
     local controlIndex = 1
 
     pile = Pile()
+    background = Background()
 
     local inputHandlers = {
-        -- upButtonUp = function()
-        --     droppables[controlIndex]:moveUp()
-        --     checkCollisions()
-        -- end,
+        upButtonDown = function()
+            background:moveCenter(pd.geometry.vector2D.new(0, -50))
+        end,
+        upButtonUp = function()
+            background:moveCenter(pd.geometry.vector2D.new(0, 50))
+            -- droppables[controlIndex]:moveUp()
+        end,
         downButtonDown = function()
-            for i, droppable in ipairs(droppables) do
-                droppable:speedUp()
-            end
+            background:moveCenter(pd.geometry.vector2D.new(0, 50))
+            -- for i, droppable in ipairs(droppables) do
+            --     droppable:speedUp()
+            -- end
         end,
         downButtonUp = function()
-            for i, droppable in ipairs(droppables) do
-                droppable:slowDown()
-            end
+            background:moveCenter(pd.geometry.vector2D.new(0, -50))
+            -- for i, droppable in ipairs(droppables) do
+            --     droppable:slowDown()
+            -- end
         end,
-        -- leftButtonUp = function()
-        --     droppables[controlIndex]:moveLeft()
-        --     checkCollisions()
-        -- end,
-        -- rightButtonUp = function()
-        --     droppables[controlIndex]:moveRight()
-        --     checkCollisions()
-        -- end,
+        leftButtonDown = function()
+            background:moveCenter(pd.geometry.vector2D.new(-50, 0))
+            -- droppables[controlIndex]:moveLeft()
+        end,
+        leftButtonUp = function()
+            background:moveCenter(pd.geometry.vector2D.new(50, 0))
+            -- droppables[controlIndex]:moveLeft()
+        end,
+        rightButtonDown = function()
+            background:moveCenter(pd.geometry.vector2D.new(50, 0))
+            --     droppables[controlIndex]:moveRight()
+        end,
+        rightButtonUp = function()
+            background:moveCenter(pd.geometry.vector2D.new(-50, 0))
+            --     droppables[controlIndex]:moveRight()
+        end,
         AButtonUp = function()
+            -- s:rotateRight()
             spawnPiece()
             -- droppables[controlIndex]:rotateRight()
-            checkCollisions()
         end,
         BButtonUp = function()
+            -- s:rotateLeft()
             spawnPiece()
             -- droppables[controlIndex]:rotateLeft()
-            checkCollisions()
         end,
         cranked = function(change, acceleratedChange)
             for i, droppable in ipairs(droppables) do
@@ -79,20 +96,14 @@ function pd.update()
 
     -- Draw grid
     gridview:drawInRect(0, 0, 400, 240)
-    gfx.drawCircleAtPoint(DISPLAY_CENTER.x, DISPLAY_CENTER.y, 20)
-    gfx.drawCircleAtPoint(DISPLAY_CENTER.x, DISPLAY_CENTER.y, 50)
-    gfx.drawCircleAtPoint(DISPLAY_CENTER.x, DISPLAY_CENTER.y, 90)
-    gfx.drawCircleAtPoint(DISPLAY_CENTER.x, DISPLAY_CENTER.y, 140)
-    gfx.drawCircleAtPoint(DISPLAY_CENTER.x, DISPLAY_CENTER.y, 200)
-    gfx.drawCircleAtPoint(DISPLAY_CENTER.x, DISPLAY_CENTER.y, 270)
-    gfx.drawCircleAtPoint(DISPLAY_CENTER.x, DISPLAY_CENTER.y, 350)
+    background:draw()
 
     -- Draw Pile
-    pile:draw()
+    pile:update()
 
     -- Draw droppables
     for i, droppable in ipairs(droppables) do
-        droppable:draw()
+        droppable:update()
     end
 
     pd.timer:updateTimers()

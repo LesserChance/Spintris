@@ -127,7 +127,7 @@ function tick()
 
     if (ticks == nextSpawnTick) then
         -- if (math.random(0, 1) >= 1) then
-        -- spawnPiece()
+        spawnPiece()
         -- end
         ticks = 0
         nextSpawnTick = math.random(50, 100)
